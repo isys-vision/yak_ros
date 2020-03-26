@@ -1,0 +1,25 @@
+<launch>
+ <node name="image_sim_node" pkg="yak_ros" type="yak_ros_image_simulator">
+   <param name="base_frame" value="world_frame"/>
+   <param name="mesh" value="$(find yak_ros)/demo/sample_box_eurobox_200_100_300.ply"/>
+   <param name="orbit_speed" value="1.0"/>
+   <param name="framerate" value="30"/>
+ </node>
+ <node name="tsdf_node" pkg="yak_ros" type="yak_ros_node">
+    <remap from="~input_point_cloud" to="/point_cloud"/>
+
+    <param name="tsdf_frame" value="tsdf_origin"/>
+    <!--<rosparam param="camera_matrix">[550.0, 0.0, 512.0, 0.0, 550.0, 640.0, 0.0, 0.0, 1.0]</rosparam>-->
+    <rosparam param="camera_matrix">[0.00000808311, 0.0, 320.192629931096633, 0.0, 0.00000808311, 511.499999999999886, 0.0, 0.0, 1.0]</rosparam>
+    <!-- camera_matrix: [focal_x, ?, cx, ?, focal_y, cy, ?, ?, ?] -->
+    <param name="cols" value="1280"/>
+    <param name="rows" value="1024"/>
+
+    <param name="volume_resolution" value="0.001"/>
+    <param name="volume_x" value="640"/>
+    <param name="volume_y" value="640"/>
+    <param name="volume_z" value="192"/>
+  </node>
+
+  <node pkg="tf" type="static_transform_publisher" name="link1_broadcaster" args="0.4 0.04 0 0 0 0 1 world_frame tsdf_origin 100" />
+</launch>
