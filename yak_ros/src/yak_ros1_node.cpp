@@ -6,17 +6,18 @@
 #include <pcl_ros/point_cloud.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/io/ply_io.h>
+#include <pcl/io/pcd_io.h>  //For pcl::savePCDFileASCII
 #include <pcl/common/transforms.h>
 
 #include <sensor_msgs/PointCloud2.h>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_eigen/tf2_eigen.h>
 #include <cv_bridge/cv_bridge.h>
+#include <opencv2/opencv.hpp>  //For cv::imsave
 
 #include <std_srvs/Trigger.h>
 #include <yak_ros_msgs/UpdateKinFuParams.h>
 #include <yak_ros/utils.h>
-
 #include <yak_ros/online_fusion_server_ros1.h>
 
 #include <isys_object_recognition_msgs/SetGetJson.h>
@@ -67,7 +68,7 @@ void OnlineFusionServer::onReceivedPointCloud(const sensor_msgs::PointCloud2Cons
   if (cloud_in->height == 1)
   {
     ROS_ERROR("YAK_ROS only supports structured pointclouds. Cloud has not been integrated.");
-    return;
+    //return;
   }
 
   // Consolidate important parameters
@@ -75,8 +76,14 @@ void OnlineFusionServer::onReceivedPointCloud(const sensor_msgs::PointCloud2Cons
   const float centre_y = params_.intr.cy;
   const float focal_x = params_.intr.fx;
   const float focal_y = params_.intr.fy;
-  const int image_height = cloud_in->height;
-  const int image_width = cloud_in->width;
+  int image_height = cloud_in->height;
+  int image_width = cloud_in->width;
+
+  if (cloud_in->height == 1)
+  {
+      image_height = params_.rows;
+      image_width = params_.cols;
+  }
 
   // Convert to useful point cloud format
   pcl::PCLPointCloud2 pcl_pc2;
@@ -84,6 +91,7 @@ void OnlineFusionServer::onReceivedPointCloud(const sensor_msgs::PointCloud2Cons
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
   pcl::fromPCLPointCloud2(pcl_pc2, *cloud);
 
+  int valid_points = 0;
   // Convert to depth image
   cv::Mat cv_image = cv::Mat(image_height, image_width, CV_32FC1, cv::Scalar(std::numeric_limits<float>::max()));
   for (std::size_t i = 0; i < cloud->points.size(); i++)
@@ -96,6 +104,10 @@ void OnlineFusionServer::onReceivedPointCloud(const sensor_msgs::PointCloud2Cons
       int pixel_pos_x = (int)(u + centre_x);
       int pixel_pos_y = (int)(v + centre_y);
 
+      if (pixel_pos_x < (image_width - 1) && pixel_pos_y < (image_height - 1))
+      {
+          valid_points++;
+      }
       if (pixel_pos_x > (image_width - 1))
       {
         pixel_pos_x = image_width - 1;
@@ -107,6 +119,10 @@ void OnlineFusionServer::onReceivedPointCloud(const sensor_msgs::PointCloud2Cons
       cv_image.at<float>(pixel_pos_y, pixel_pos_x) = z;
     }
   }
+  //DEBUG: Save input point cloud and depth image
+  ROS_DEBUG("Input point cloud has %i points inside image bounds.", valid_points);
+  pcl::io::savePCDFileASCII("/home/lorenz/Mikado/input.pcd", *cloud);
+  cv::imwrite( "/home/lorenz/Mikado/input.jpg", cv_image );
 
   // Convert to message
   cv_image.convertTo(cv_image, CV_16UC1);
@@ -146,7 +162,7 @@ void OnlineFusionServer::onReceivedDepthImg(const sensor_msgs::ImageConstPtr& im
       if (motion_mag < DEFAULT_MINIMUM_TRANSLATION)
       {
         ROS_DEBUG("Motion below threshold, image will not be fused");
-        return;
+        //return;
       }
 
       ROS_DEBUG("Image encoding is %s", next_image->encoding.c_str());
@@ -302,32 +318,31 @@ int main(int argc, char** argv)
 
   // Call Ensenso service "get_set_json", to retrieve camera intrinsics
   ros::NodeHandle nh;
-  // TODO: Somehow get the correct camera
+  //TODO Somehow get the correct camera
   ros::ServiceClient sc = nh.serviceClient<isys_object_recognition_msgs::SetGetJson>("/cameras/Ensenso_Camera_0/set_get_json");
   isys_object_recognition_msgs::SetGetJson srv;
   srv.request.get_json = "/Cameras/150001_virtual/Calibration/Dynamic/Stereo/Left/Camera/";
   sc.call(srv);
   std::string result = srv.response.get_result;
-  // Logging for debug reasons..
-  // ROS_FATAL("%s", result.c_str());
-  const double F = 0.008;
+  // Logging response for debug reasons
+  ROS_DEBUG("Got the following result from Ensenso node: %s", result.c_str());
   // Parse the result JSON
   rapidjson::Document jsonDocument;
   jsonDocument.Parse(result.c_str());
-  double Fx = F / jsonDocument[0][0].GetDouble();
-  double Fy = F / jsonDocument[1][1].GetDouble();
+  double Fx = jsonDocument[0][0].GetDouble();
+  double Fy = jsonDocument[1][1].GetDouble();
   double Cx = jsonDocument[2][0].GetDouble();
   double Cy = jsonDocument[2][1].GetDouble();
-  // Logging for debug reasons..
-  ROS_DEBUG("Read camera matrix from Ensenso node. Fx: %f, Fy: %f, Cx: %f, Cy: %f", Fx, Fy, Cx, Cy);
+  // Logging new camera matrix
+  ROS_INFO("Read camera matrix from Ensenso node. Fx: %f, Fy: %f, Cx: %f, Cy: %f", Fx, Fy, Cx, Cy);
 
-  /*
   // Get camera intrinsics from params
-  XmlRpc::XmlRpcValue camera_matrix;
-  pnh.getParam("camera_matrix", camera_matrix);
-  */
+  // XmlRpc::XmlRpcValue camera_matrix;
+  // pnh.getParam("camera_matrix", camera_matrix);
+
   // Create camera matrix with own values from ensenso node
   double camera_matrix[9] = { Fx, 0.0, Cx, 0.0, Fy, Cy, 0.0, 0.0, 1.0 };
+  //double camera_matrix[9] = { Fx, 0.0, 0.0, 0.0, Fy, 0.0, 0.0, 0.0, 1.0 };
 
   kinfu_params.intr.fx = static_cast<float>(static_cast<double>(camera_matrix[0]));
   kinfu_params.intr.fy = static_cast<float>(static_cast<double>(camera_matrix[4]));
