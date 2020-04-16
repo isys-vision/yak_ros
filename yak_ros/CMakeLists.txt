@@ -24,6 +24,10 @@ find_package(cv_bridge REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(OpenCV REQUIRED COMPONENTS core highgui)
 
+set(RAPIDJSON_INCLUDE_DIRS "/usr/include/rapidjson")
+include_directories(${RAPIDJSON_INCLUDE_DIRS})
+#find_package(RapidJSON 1.0 REQUIRED MODULE)
+
 if ($ENV{ROS_VERSION} VERSION_EQUAL "1")
     # Build as a Catkin package for ROS
 

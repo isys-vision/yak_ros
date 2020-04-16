@@ -22,7 +22,7 @@
 
 #include <isys_object_recognition_msgs/SetGetJson.h>
 
-#include "rapidjson/document.h"
+#include <rapidjson/document.h>
 
 using namespace yak_ros;
 
