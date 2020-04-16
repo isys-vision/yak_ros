@@ -24,6 +24,7 @@
 
 #include <rapidjson/document.h>
 
+
 using namespace yak_ros;
 
 static const std::double_t DEFAULT_MINIMUM_TRANSLATION = 0.00001;
@@ -315,7 +316,6 @@ int main(int argc, char** argv)
   pnh.param<int>("cols", kinfu_params.cols, 640);
   pnh.param<int>("rows", kinfu_params.rows, 480);
 
-
   // Call Ensenso service "get_set_json", to retrieve camera intrinsics
   ros::NodeHandle nh;
   //TODO Somehow get the correct camera
@@ -342,7 +342,6 @@ int main(int argc, char** argv)
 
   // Create camera matrix with own values from ensenso node
   double camera_matrix[9] = { Fx, 0.0, Cx, 0.0, Fy, Cy, 0.0, 0.0, 1.0 };
-  //double camera_matrix[9] = { Fx, 0.0, 0.0, 0.0, Fy, 0.0, 0.0, 0.0, 1.0 };
 
   kinfu_params.intr.fx = static_cast<float>(static_cast<double>(camera_matrix[0]));
   kinfu_params.intr.fy = static_cast<float>(static_cast<double>(camera_matrix[4]));
